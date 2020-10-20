@@ -5,13 +5,13 @@ import com.microsoft.azure.storage.blob.CloudBlockBlob;
 import com.microsoft.azure.storage.blob.ListBlobItem;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
+import lombok.SneakyThrows;
 import lombok.ToString;
 
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.Date;
 
-import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
 
 @Getter @ToString
@@ -19,10 +19,14 @@ import static com.google.common.base.Preconditions.checkNotNull;
 public abstract class AzureBlob {
     private final String name;
     private final String url;
+    private final String container;
 
+    @SneakyThrows
     public static AzureBlobFile toFile(CloudBlockBlob blob) {
         checkNotNull(blob);
-        return new AzureBlobFile(blob.getName(), blob.getUri().toString(),
+        return new AzureBlobFile(blob.getName(),
+                blob.getUri().toString(),
+                blob.getContainer().getName(),
                 fromDate(blob.getProperties().getCreatedTime()),
                 fromDate(blob.getProperties().getLastModified()));
     }
@@ -35,9 +39,10 @@ public abstract class AzureBlob {
         throw new UnsupportedOperationException();
     }
 
+    @SneakyThrows
     public static AzureBlobDirectory toDir(CloudBlobDirectory dir) {
         checkNotNull(dir);
-        return new AzureBlobDirectory(dir.getPrefix(), dir.getUri().toString());
+        return new AzureBlobDirectory(dir.getPrefix(), dir.getUri().toString(), dir.getContainer().getName());
     }
 
     public static LocalDateTime fromDate(Date date) {
@@ -50,8 +55,8 @@ public abstract class AzureBlob {
         private final LocalDateTime creation;
         private final LocalDateTime modification;
 
-        public AzureBlobFile(String name, String url, LocalDateTime creation, LocalDateTime modification) {
-            super(name, url);
+        public AzureBlobFile(String name, String url, String containerName, LocalDateTime creation, LocalDateTime modification) {
+            super(name, url, containerName);
             this.creation = creation;
             this.modification = modification;
         }
@@ -69,8 +74,8 @@ public abstract class AzureBlob {
 
     @Getter
     public static final class AzureBlobDirectory extends AzureBlob {
-        public AzureBlobDirectory(String name, String url) {
-            super(name, url);
+        public AzureBlobDirectory(String name, String url, String containerName) {
+            super(name, url, containerName);
         }
 
         @Override

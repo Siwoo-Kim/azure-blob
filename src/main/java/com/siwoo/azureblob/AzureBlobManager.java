@@ -1,5 +1,9 @@
 package com.siwoo.azureblob;
 
+import com.azure.storage.blob.BlobClient;
+import com.azure.storage.blob.BlobClientBuilder;
+import com.azure.storage.blob.models.AccessTier;
+import com.azure.storage.blob.models.BlobType;
 import com.microsoft.azure.storage.*;
 import com.microsoft.azure.storage.blob.*;
 import lombok.SneakyThrows;
@@ -13,14 +17,14 @@ import java.nio.charset.StandardCharsets;
 import java.security.InvalidKeyException;
 import java.util.*;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.locks.Condition;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
-import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
 
 /**
@@ -127,7 +131,54 @@ public class AzureBlobManager {
         }
     }
 
-    private static Logger logger = LoggerFactory.getLogger(AzureBlobManager.class);
+    @SneakyThrows
+    public int setTier(List<AzureBlob> blobs, AccessTier tier) {
+        checkNotNull(blobs, tier);
+        int unit = blobs.size() / 10;
+        integer = new AtomicInteger(0);
+        CountDownLatch latch = new CountDownLatch(unit);
+        int result = parallalTiering(0, blobs.size(), unit, blobs, tier, latch);
+        latch.await();
+        System.out.println(integer.get());
+        return result;
+    }
+
+    private static AtomicInteger integer;
+
+    /**
+     * 느리니까 병렬 연산하자
+     */
+    @SneakyThrows
+    private int parallalTiering(int start, int end, int unit, List<AzureBlob> blobs, AccessTier tier, CountDownLatch latch) {
+        if (end - start <= unit) {
+            //do work
+            if (start > end) return 0;
+            integer.incrementAndGet();
+            System.out.printf("from %d - to %d%n", start, end);
+            List<AzureBlob> sublist = blobs.subList(start, end);
+            new Thread(() -> {
+                try {
+                    for (AzureBlob file : sublist) {
+                        BlobClient blobClient = new BlobClientBuilder()
+                                .connectionString(CONNECTION_STRING)
+                                .containerName(file.getContainer())
+                                .blobName(file.getName())
+                                .buildClient();
+                        if (blobClient.getProperties().getAccessTier() != tier
+                                && blobClient.getProperties().getBlobSize() != 0) //todo: find out how to diff btw dir and blob
+                            blobClient.setAccessTier(tier);
+                        latch.countDown();
+                    }
+                } catch (Exception e) {
+                    e.printStackTrace();
+                    //ignore
+                }
+            }).start();
+            return end - start;
+        }
+        int mid = (end + start) / 2;
+        return parallalTiering(start, mid, unit, blobs, tier, latch) + parallalTiering(mid, end, unit, blobs, tier, latch);
+    }
 
     @SneakyThrows
     private void createTestBlobs(String container) {
@@ -148,11 +199,10 @@ public class AzureBlobManager {
                             try {
                                 String file = String.format(FILE_FORMAT, f);
                                 String path = String.format(FINAL, part1, part2, file);
-                                logger.info(path);
                                 CloudBlockBlob blob = c.getBlockBlobReference(path);
                                 blob.uploadFromByteArray(dummy, 0, dummy.length);
                             } catch (Exception e) {
-                                logger.error("error", e);
+                                //ignore
                             }
                         }
                     }

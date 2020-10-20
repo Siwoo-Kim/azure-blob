@@ -1,5 +1,6 @@
 package com.siwoo.azureblob;
 
+import com.azure.storage.blob.models.AccessTier;
 import org.apache.commons.lang3.time.StopWatch;
 
 import java.nio.charset.StandardCharsets;
@@ -39,15 +40,19 @@ public class Main {
 //        System.out.println(result);
 //        System.out.println(result.size());
 //
-        LocalDateTime time = LocalDateTime.of(2020, 10, 20, 14, 04, 00);
+        LocalDateTime time = LocalDateTime.of(2020, 01, 20, 14, 04, 00);
         result = blobManager.blobs(props.getProperty(BLOB_CONTAINER), "root=001", e -> time.isBefore(AzureBlob.fromDate(e.getProperties().getLastModified())));
         System.out.println(result);
         System.out.println(result.size());
 
-        String url = blobManager.blobs(props.getProperty(BLOB_CONTAINER), "root=001/2015-01/test001.txt").get(0).getUrl();
-        System.out.printf("Go to resource: %s%n", url);
-
-        byte[] bytes = blobManager.download(props.getProperty(BLOB_CONTAINER), "root=001/2015-01/test001.txt");
-        System.out.println(new String(bytes, StandardCharsets.UTF_8));
+        int cnt = blobManager.setTier(result, AccessTier.HOT);
+        System.out.println(cnt);
+//        String url = blobManager.blobs(props.getProperty(BLOB_CONTAINER), "root=001/2015-01/test001.txt").get(0).getUrl();
+//        System.out.printf("Go to resource: %s%n", url);
+//
+//        byte[] bytes = blobManager.download(props.getProperty(BLOB_CONTAINER), "root=001/2015-01/test001.txt");
+//        System.out.println(new String(bytes, StandardCharsets.UTF_8));
+//
+//
     }
 }
